@@ -16,8 +16,18 @@ From the app's instructions:
 The device advertises as `BOSCH_HP_XXXXXX` (or `HP_XXXXXX` on unbranded units). The
 PIN is 6 digits (`^[0-9]{6}$`).
 
-Open question: does the unit stay connectable (for a bonded client) after the
-pairing window ends, or only while the LED is blinking?
+Open question: does the unit advertise/stay connectable only while the blue LED is
+blinking (i.e. the Connect-button window), or all the time? Repeated 60 s scans from
+indoors — detecting by the `f76aa910…` service UUID as well as the name, so an unnamed
+advertisement would still match — never saw the unit while the button had **not** been
+pressed, though the host may simply have been out of range of the outdoor unit. This is
+the main thing to settle on real hardware: scan from a few metres away, first without
+touching the unit, then within the LED-blink window.
+
+The PIN (`bluetoothPassword`) is **only** used for OS-level pairing — the app displays it
+for the user to type into the system pairing dialog and never writes it over GATT. So if
+the GATT characteristics turn out not to require encryption, no PIN is needed; the probe
+now tries the unpaired flow first and reports if an auth error demands pairing.
 
 ## GATT
 

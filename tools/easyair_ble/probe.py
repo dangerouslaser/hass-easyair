@@ -23,6 +23,7 @@ from bleak import BleakClient, BleakScanner
 from .decoder import (
     NAME_PREFIXES,
     NOTIFY_CHAR_UUID,
+    SERVICE_UUID,
     TRIGGER_CHAR_UUID,
     decode_packet,
     describe,
@@ -30,23 +31,36 @@ from .decoder import (
 )
 
 
+def _is_unit(d, adv) -> bool:
+    """Match by Bosch service UUID or by the BOSCH_HP_/HP_ name prefix.
+
+    Matching on the service UUID catches a unit that advertises without a
+    resolvable name (common on macOS, and when the LED-blink window has just
+    started), which the name-only filter would miss.
+    """
+    name = d.name or adv.local_name or ""
+    uuids = {u.lower() for u in (adv.service_uuids or [])}
+    return name.startswith(NAME_PREFIXES) or SERVICE_UUID.lower() in uuids
+
+
 async def main(args):
-    print("Scanning for BOSCH_HP_* / HP_* devices...")
+    print(f"Scanning {args.scan:.0f}s for the Bosch unit (service {SERVICE_UUID[:8]}… / "
+          "BOSCH_HP_* / HP_*)...")
     devices = await BleakScanner.discover(timeout=args.scan, return_adv=True)
-    found = [
-        (d, adv) for d, adv in devices.values()
-        if (d.name or adv.local_name or "").startswith(NAME_PREFIXES)
-    ]
+    found = [(d, adv) for d, adv in devices.values() if _is_unit(d, adv)]
     if args.name:
         found = [(d, a) for d, a in found if (d.name or a.local_name) == args.name]
     if not found:
-        print("No unit found. Is the blue LED blinking? Nearby named devices:")
-        for d, adv in devices.values():
-            if d.name or adv.local_name:
-                print(f"  {d.name or adv.local_name}  rssi={adv.rssi}  {d.address}")
+        print("No Bosch unit found. Is the blue LED blinking, and is this host within a")
+        print("few metres of the outdoor unit? All devices seen this scan (strongest first):")
+        for d, adv in sorted(devices.values(), key=lambda t: t[1].rssi, reverse=True):
+            label = d.name or adv.local_name or "(unnamed)"
+            uuids = ",".join(adv.service_uuids or []) or "-"
+            print(f"  rssi={adv.rssi:>4}  {label:<28} {d.address}  services={uuids}")
         return
     dev, adv = found[0]
-    print(f"Found {dev.name or adv.local_name} rssi={adv.rssi} services={adv.service_uuids}")
+    print(f"Found {dev.name or adv.local_name or '(unnamed)'} rssi={adv.rssi} "
+          f"services={adv.service_uuids}")
 
     packets: list[bytes] = []
     log = open(args.out, "a")
@@ -87,10 +101,23 @@ async def _session(dev, args, on_notify):
                 print(f"pair(): {await client.pair()}")
             except Exception as e:  # noqa: BLE001
                 print(f"pair() failed: {e!r}")
-        await client.start_notify(NOTIFY_CHAR_UUID, on_notify)
-        trigger = os.urandom(3)  # app writes base64-decoded 4 random chars = 3 bytes
-        await client.write_gatt_char(TRIGGER_CHAR_UUID, trigger, response=True)
-        print(f"-> wrote trigger {trigger.hex()}; listening {args.listen}s ...")
+        # The app never sends the PIN over GATT; pairing (if any) is left to the OS
+        # and only happens if a characteristic demands encryption. Try the flow
+        # unpaired so we learn whether a PIN is needed at all.
+        try:
+            await client.start_notify(NOTIFY_CHAR_UUID, on_notify)
+            trigger = os.urandom(3)  # app writes base64-decoded 4 random chars = 3 bytes
+            await client.write_gatt_char(TRIGGER_CHAR_UUID, trigger, response=True)
+            print(f"-> wrote trigger {trigger.hex()} unpaired; listening {args.listen}s ...")
+        except Exception as e:  # noqa: BLE001
+            msg = str(e).lower()
+            if any(k in msg for k in ("auth", "encrypt", "insufficient", "not permitted", "bond")):
+                print(f"\nSubscribe/write was rejected for authentication: {e!r}")
+                print("=> The unit requires BLE pairing. Re-run with --pin <6-digit PIN>")
+                print("   (Linux/HA host answers it via the BlueZ agent; macOS prompts).")
+            else:
+                print(f"\nSubscribe/write failed (not an auth error): {e!r}")
+            return
         await asyncio.sleep(args.listen)
         await client.stop_notify(NOTIFY_CHAR_UUID)
 
