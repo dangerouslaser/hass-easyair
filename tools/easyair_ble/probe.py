@@ -5,7 +5,7 @@ Requires: pip install bleak
   1. Open the outdoor unit's access panel, hold the gateway "Connect" button for
      4 seconds until the blue Bluetooth LED blinks.
   2. python3 -m easyair_ble.probe            (run from the tools/ directory)
-  3. When the OS asks for a pairing PIN, enter the 6-digit Bluetooth PIN.
+  3. macOS: enter the PIN in the system prompt. Linux: pass --pin 123456.
 
 Raw packets are written to ble_capture.jsonl so the decoding can be verified.
 """
@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 import time
 
 from bleak import BleakClient, BleakScanner
@@ -57,17 +58,35 @@ async def main(args):
         log.flush()
         print(f"<- {data.hex(' ')}")
 
+    agent = None
+    if args.pin and sys.platform.startswith("linux"):
+        from .bluez_agent import PasskeyAgent
+
+        agent = PasskeyAgent(args.pin, dev.address)
+        await agent.__aenter__()
+        print("Registered BlueZ passkey agent")
+
+    try:
+        await _session(dev, args, on_notify)
+    finally:
+        if agent:
+            await agent.__aexit__(None, None, None)
+    log.close()
+    _summary(packets, args)
+
+
+async def _session(dev, args, on_notify):
     async with BleakClient(dev, timeout=30) as client:
         print("Connected. Services:")
         for s in client.services:
             print(f"  {s.uuid}")
             for c in s.characteristics:
                 print(f"    {c.uuid} {','.join(c.properties)}")
-        if args.pin and hasattr(client, "pair"):
+        if args.pin and sys.platform.startswith("linux"):
             try:
-                await client.pair()
-            except Exception as e:  # macOS pairs implicitly when needed
-                print(f"pair(): {e}")
+                print(f"pair(): {await client.pair()}")
+            except Exception as e:  # noqa: BLE001
+                print(f"pair() failed: {e!r}")
         await client.start_notify(NOTIFY_CHAR_UUID, on_notify)
         trigger = os.urandom(3)  # app writes base64-decoded 4 random chars = 3 bytes
         await client.write_gatt_char(TRIGGER_CHAR_UUID, trigger, response=True)
@@ -75,7 +94,8 @@ async def main(args):
         await asyncio.sleep(args.listen)
         await client.stop_notify(NOTIFY_CHAR_UUID)
 
-    log.close()
+
+def _summary(packets, args):
     if not packets:
         print("No notifications received.")
         return
@@ -94,6 +114,6 @@ if __name__ == "__main__":
     ap.add_argument("--scan", type=float, default=15)
     ap.add_argument("--listen", type=float, default=30)
     ap.add_argument("--table", choices=["v22", "new"])
-    ap.add_argument("--pin", action="store_true", help="explicitly request pairing (Linux/Windows)")
+    ap.add_argument("--pin", help="6-digit Bluetooth PIN (Linux: answered via a BlueZ agent)")
     ap.add_argument("--out", default="ble_capture.jsonl")
     asyncio.run(main(ap.parse_args()))
