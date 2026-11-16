@@ -5,3 +5,4 @@ __pycache__/
 .easyair_tokens*.json
 .venv/
 .DS_Store
+ble_capture.jsonl
