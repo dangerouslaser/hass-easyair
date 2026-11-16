@@ -43,6 +43,19 @@ def _is_unit(d, adv) -> bool:
     return name.startswith(NAME_PREFIXES) or SERVICE_UUID.lower() in uuids
 
 
+_KNOWN_COMPANIES = {0x004C: "Apple", 0x0006: "Microsoft", 0x0075: "Samsung", 0x00E0: "Google"}
+
+
+def _mfr(adv) -> str:
+    """Bluetooth SIG company IDs from the advertisement's manufacturer data."""
+    if not adv.manufacturer_data:
+        return "-"
+    return ",".join(
+        f"0x{cid:04X}" + (f"({_KNOWN_COMPANIES[cid]})" if cid in _KNOWN_COMPANIES else "")
+        for cid in adv.manufacturer_data
+    )
+
+
 async def main(args):
     print(f"Scanning {args.scan:.0f}s for the Bosch unit (service {SERVICE_UUID[:8]}… / "
           "BOSCH_HP_* / HP_*)...")
@@ -56,7 +69,8 @@ async def main(args):
         for d, adv in sorted(devices.values(), key=lambda t: t[1].rssi, reverse=True):
             label = d.name or adv.local_name or "(unnamed)"
             uuids = ",".join(adv.service_uuids or []) or "-"
-            print(f"  rssi={adv.rssi:>4}  {label:<28} {d.address}  services={uuids}")
+            print(f"  rssi={adv.rssi:>4}  {label:<28} {d.address}  mfr={_mfr(adv)}  "
+                  f"services={uuids}")
         return
     dev, adv = found[0]
     print(f"Found {dev.name or adv.local_name or '(unnamed)'} rssi={adv.rssi} "
