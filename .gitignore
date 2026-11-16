@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.apk
+*.xapk
+.easyair_tokens*.json
+.venv/
+.DS_Store

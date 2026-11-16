@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in with SingleKey ID",
+        "description": "1. Open DevTools in your browser (F12) on the **Network** tab and enable **Preserve log / Persist Logs**.\n2. Open [this SingleKey ID login link]({login_url}) in that tab and sign in (password or passkey).\n3. The browser will then fail to open an `idsmobileapp://` address. In the Network list, select the `idpresponse` request (status 302) and copy its **Location** response header. Firefox may also show it in the address bar.\n4. Paste the whole `idsmobileapp://?code=...` value below within 5 minutes.",
+        "data": { "redirect_url": "Redirect URL (idsmobileapp://?code=...)" }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to Bosch EasyAir again",
+        "description": "Your EasyAir session has expired.\n\n1. Open DevTools (F12) on the **Network** tab with **Preserve log / Persist Logs** enabled.\n2. Open [this SingleKey ID login link]({login_url}) and sign in.\n3. Copy the **Location** header of the `idpresponse` request (it starts with `idsmobileapp://?code=`) and paste it below.",
+        "data": { "redirect_url": "Redirect URL (idsmobileapp://?code=...)" }
+      }
+    },
+    "error": {
+      "invalid_auth": "That code was rejected. Codes are single-use and expire after 5 minutes; a new login link has been generated above, please try again.",
+      "cannot_connect": "Could not reach the EasyAir cloud."
+    },
+    "abort": {
+      "already_configured": "This EasyAir account is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "wrong_account": "You signed in with a different account than the one being re-authenticated."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "energy_total": { "name": "Total energy" },
+      "energy_this_week": { "name": "Energy this week" },
+      "energy_this_month": { "name": "Energy this month" },
+      "energy_last_month": { "name": "Energy last month" },
+      "energy_this_year": { "name": "Energy this year" },
+      "service_status": { "name": "Service status" }
+    }
+  }
+}
