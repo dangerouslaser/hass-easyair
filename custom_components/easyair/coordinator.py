@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .api import EasyAirApi, EasyAirAuthError, EasyAirError
 from .const import DOMAIN, UPDATE_INTERVAL
+from .statistics import import_energy_history
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
@@ -109,6 +110,10 @@ class EasyAirCoordinator(DataUpdateCoordinator[dict[str, UnitData]]):
                 communicating_flag=energy.get("communicatingFlag"),
                 monthly=monthly,
             )
+            try:
+                import_energy_history(self.hass, gw, device, energy)
+            except Exception:  # never let a statistics problem break polling
+                _LOGGER.exception("Failed to import energy history for %s", gw)
         await self._store.async_save(self._state)
         return result
 

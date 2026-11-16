@@ -50,8 +50,17 @@ Assistant prompts you to repeat these steps (re-authentication).
 
 ## Adding to the Energy dashboard
 
+The integration imports the cloud's weekly history (back to installation) into Home
+Assistant's long-term statistics as **`<heat pump name> energy`**
+(`easyair:<gateway>_energy`), and keeps it updated on every poll.
+
 Settings → Dashboards → **Energy** → *Individual devices* (or *Electricity grid →
-consumption*) → add **Total energy** for your heat pump.
+consumption*) → add **`<heat pump name> energy`** (the statistic, not the
+**Total energy** sensor). Don't add both, or usage is counted twice.
+
+Resolution is weekly: the cloud has no daily or hourly data, so each week's usage is
+stamped on that week's Sunday. Week and month views are accurate; day and hour views
+show the whole week on Sunday.
 
 ## Development
 

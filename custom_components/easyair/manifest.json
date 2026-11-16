@@ -1,12 +1,17 @@
 {
   "domain": "easyair",
   "name": "Bosch EasyAir",
-  "codeowners": ["@dangerouslaser"],
+  "codeowners": [
+    "@dangerouslaser"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
   "documentation": "https://github.com/dangerouslaser/hass-easyair",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/dangerouslaser/hass-easyair/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
