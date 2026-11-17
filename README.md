@@ -59,8 +59,8 @@ consumption*) → add **`<heat pump name> energy`** (the statistic, not the
 **Total energy** sensor). Don't add both, or usage is counted twice.
 
 Resolution is weekly: the cloud has no daily or hourly data, so each week's usage is
-stamped on that week's Sunday. Week and month views are accurate; day and hour views
-show the whole week on Sunday.
+spread evenly over its days (the current week over the days so far). Week and month
+totals are accurate; day bars show that week's daily average.
 
 ## Development
 

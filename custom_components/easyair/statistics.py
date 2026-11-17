@@ -3,8 +3,9 @@
 The cloud only exposes whole-kWh totals per ISO-ish week (and per month); there is
 no daily or hourly breakdown for a homeowner account. We turn the weekly buckets
 into Home Assistant long-term statistics so the Energy dashboard shows history and
-keeps updating. Resolution is therefore weekly: a whole week's energy is stamped at
-that week's Sunday 00:00 local, so day/hour views attribute it to the Sunday.
+keeps updating. Resolution is therefore weekly: each week's energy is spread evenly
+over its days (the current week over the days elapsed so far), so week and month views
+are exact and day bars show that week's daily average.
 
 This is an *external* statistic (source = this integration), separate from the live
 `energy_total` sensor. Add this one to the Energy dashboard, not the sensor, or usage
@@ -17,7 +18,11 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
@@ -82,16 +87,25 @@ def _build_points(energy: dict[str, Any], service_start_ms: int | None) -> list[
             start = _week_start(year, wk, lower, upper)
             by_start[start] = by_start.get(start, 0.0) + v
 
+    # Spread each week evenly over its days (only the days elapsed so far for the
+    # current week). Stamping a whole week on one Sunday left Monday-start week
+    # views empty and piled the week onto a single day bar.
+    today = now.date()
     points: list[StatisticData] = []
     running = 0.0
-    for start_date, kwh in sorted(by_start.items()):
-        running += kwh
-        start = dt_util.as_utc(dt_util.start_of_local_day(start_date)).replace(
-            minute=0, second=0, microsecond=0
-        )
-        # sum = cumulative through this week (HA convention: the point carries the
-        # running total including its own bucket); state = this week's kWh.
-        points.append(StatisticData(start=start, state=kwh, sum=running))
+    for week_start, kwh in sorted(by_start.items()):
+        if week_start > today:
+            continue
+        days = min(7, (today - week_start).days + 1)
+        per_day = kwh / days
+        for i in range(days):
+            day = week_start + timedelta(days=i)
+            running += per_day
+            start = dt_util.as_utc(dt_util.start_of_local_day(day)).replace(
+                minute=0, second=0, microsecond=0
+            )
+            # sum = cumulative including this day (HA convention); state = day kWh.
+            points.append(StatisticData(start=start, state=per_day, sum=running))
     return points
 
 
@@ -108,7 +122,8 @@ def import_energy_history(
         return
     name = device.get("ODUName") or "Bosch heat pump"
     metadata = StatisticMetaData(
-        has_mean=False,
+        mean_type=StatisticMeanType.NONE,
+        unit_class="energy",
         has_sum=True,
         name=f"{name} energy",
         source=DOMAIN,
